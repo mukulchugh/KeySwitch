@@ -175,6 +175,10 @@ final class InputBridge: ObservableObject {
         // connection.send() itself is async internally, so this doesn't block.
         if let mouse = mousePayload(type: type, event: event) {
             PeerNetwork.shared.sendMouseEvent(mouse)
+            // Bulletproof freeze: forcibly snap the local cursor back to the parked
+            // point. Returning nil + decouple should be enough, but on some setups
+            // (trackpads) the pointer still drifts, so we pin it every move.
+            if let fp = freezePoint { CGWarpMouseCursorPosition(fp) }
             return nil
         }
 
@@ -254,11 +258,16 @@ final class InputBridge: ObservableObject {
     /// only drives the peer. Movement events still reach the tap (with deltas), so
     /// we can forward them; the local cursor just stops moving. Must always be undone
     /// (here and on quit) or the user's mouse stays frozen.
+    nonisolated(unsafe) private var freezePoint: CGPoint?
+
     func setLocalCursorFrozen(_ frozen: Bool) {
-        CGAssociateMouseAndMouseCursorPosition(frozen ? 0 : 1)
         if frozen {
+            freezePoint = CGEvent(source: nil)?.location
+            CGAssociateMouseAndMouseCursorPosition(0)
             CGDisplayHideCursor(CGMainDisplayID())
         } else {
+            freezePoint = nil
+            CGAssociateMouseAndMouseCursorPosition(1)
             CGDisplayShowCursor(CGMainDisplayID())
         }
     }

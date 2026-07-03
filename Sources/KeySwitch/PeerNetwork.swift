@@ -37,9 +37,12 @@ final class PeerNetwork: ObservableObject {
         return NWParameters(tls: nil, tcp: tcp)
     }
 
+    @MainActor private var wantsListening = false
+
     @MainActor
     func start(config: AppConfig) {
         stop()
+        wantsListening = true
         localToken = config.pairingToken
         startListener(port: config.listenPort, serviceName: config.thisMacName)
         startBrowser(excludingName: config.thisMacName)
@@ -47,12 +50,27 @@ final class PeerNetwork: ObservableObject {
 
     @MainActor
     func stop() {
+        wantsListening = false
         listener?.cancel()
         listener = nil
         browser?.cancel()
         browser = nil
         isListening = false
         discoveredPeers = []
+    }
+
+    /// The listener can fail to bind if a just-killed instance still holds the
+    /// port (the recurring "app running but not listening" bug). Self-heal by
+    /// retrying until it binds, as long as we still want to listen.
+    @MainActor
+    private func retryListenerSoon(port: UInt16, serviceName: String) {
+        guard wantsListening else { return }
+        listener?.cancel()
+        listener = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.wantsListening, self.listener == nil else { return }
+            self.startListener(port: port, serviceName: serviceName)
+        }
     }
 
     private func startListener(port: UInt16, serviceName: String) {
@@ -63,7 +81,18 @@ final class PeerNetwork: ObservableObject {
             listener.service = NWListener.Service(name: advertisedName, type: "_keyswitch._tcp")
             listener.stateUpdateHandler = { state in
                 Task { @MainActor in
-                    PeerNetwork.shared.isListening = (state == .ready)
+                    let net = PeerNetwork.shared
+                    switch state {
+                    case .ready:
+                        net.isListening = true
+                    case .failed:
+                        net.isListening = false
+                        net.retryListenerSoon(port: port, serviceName: serviceName)
+                    case .cancelled:
+                        net.isListening = false
+                    default:
+                        break
+                    }
                 }
             }
             listener.newConnectionHandler = { connection in
@@ -73,7 +102,8 @@ final class PeerNetwork: ObservableObject {
             self.listener = listener
         } catch {
             Task { @MainActor in
-                PeerNetwork.shared.lastStatusMessage = "Failed to start listener: \(error.localizedDescription)"
+                PeerNetwork.shared.lastStatusMessage = "Listener bind failed, retrying…"
+                PeerNetwork.shared.retryListenerSoon(port: port, serviceName: serviceName)
             }
         }
     }
