@@ -38,7 +38,6 @@ final class PeerNetwork: ObservableObject {
     nonisolated(unsafe) private var pendingScrollDY: Int64 = 0
     nonisolated(unsafe) private var hasPendingMove = false
     nonisolated(unsafe) private var hasPendingScroll = false
-    nonisolated(unsafe) private var nextFlushDeadline: DispatchTime = .now()
     nonisolated(unsafe) private var trailingArmed = false
     // Leading-edge throttle: the first move after idle sends instantly (native
     // latency); rapid follow-ups within this window coalesce into one packet.
@@ -499,21 +498,18 @@ final class PeerNetwork: ObservableObject {
         }
     }
 
-    /// Leading-edge throttle. MUST run on `queue`. If we're past the window, flush
-    /// immediately (first move after idle = native latency). Otherwise arm a single
-    /// trailing flush at the window boundary so continuous motion stays smooth.
+    /// Always coalesce for a short fixed window instead of leading-edge-flushing
+    /// the very first event. HID delivers X and Y deltas as SEPARATE callbacks
+    /// (unlike CGEventTap, which gave both in one event) — an instant flush on
+    /// the first one split every diagonal move into a jagged two-step motion.
+    /// Waiting a few ms guarantees both axes from the same physical HID report
+    /// land in the same packet.
     private func schedulePumpOnQueue() {
-        let now = DispatchTime.now()
-        if now >= nextFlushDeadline {
+        guard !trailingArmed else { return }
+        trailingArmed = true
+        queue.asyncAfter(deadline: .now() + .milliseconds(Self.flushIntervalMs)) { [self] in
+            trailingArmed = false
             flushPendingOnQueue()
-            nextFlushDeadline = now + .milliseconds(Self.flushIntervalMs)
-        } else if !trailingArmed {
-            trailingArmed = true
-            queue.asyncAfter(deadline: nextFlushDeadline) { [self] in
-                trailingArmed = false
-                flushPendingOnQueue()
-                nextFlushDeadline = DispatchTime.now() + .milliseconds(Self.flushIntervalMs)
-            }
         }
     }
 
@@ -560,7 +556,6 @@ final class PeerNetwork: ObservableObject {
             pendingDX = 0; pendingDY = 0; hasPendingMove = false
             pendingScrollDX = 0; pendingScrollDY = 0; hasPendingScroll = false
             trailingArmed = false
-            nextFlushDeadline = .now()
         }
     }
 
