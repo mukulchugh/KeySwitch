@@ -13,6 +13,7 @@ let package = Package(
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("Cocoa"),
                 .linkedFramework("SwiftUI"),
+                .linkedFramework("ServiceManagement"),
             ]
         ),
     ]

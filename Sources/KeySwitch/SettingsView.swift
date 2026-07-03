@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var isPairing = false
     @State private var isPinging = false
     @State private var showAdvanced = false
+    @State private var startAtLogin = LoginItem.isEnabled
 
     private var isPaired: Bool { configStore.isConfigured }
 
@@ -119,6 +120,13 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("Start KeySwitch at login", isOn: Binding(
+                    get: { startAtLogin },
+                    set: { newValue in
+                        startAtLogin = LoginItem.setEnabled(newValue) ? newValue : LoginItem.isEnabled
+                    }
+                ))
+
                 DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
                     TextField("This Mac's name", text: $configStore.config.thisMacName)
                     TextField("Other Mac's IP (if discovery fails)", text: $configStore.config.peerAddress)
@@ -137,8 +145,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 380)
+        .frame(width: 420, height: 410)
         .onAppear {
+            startAtLogin = LoginItem.isEnabled
             bridge.refreshPermissions()
             restartNetwork()
             if isPaired {
