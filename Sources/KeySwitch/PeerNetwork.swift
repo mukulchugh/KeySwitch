@@ -25,6 +25,16 @@ final class PeerNetwork: ObservableObject {
     nonisolated(unsafe) private var fwdHost = ""
     nonisolated(unsafe) private var localToken = "" // this Mac's token, for authing incoming hot events
 
+    // Move/scroll coalescing state — accumulated and flushed only on `queue`.
+    nonisolated(unsafe) private var pendingDX = 0.0
+    nonisolated(unsafe) private var pendingDY = 0.0
+    nonisolated(unsafe) private var pendingScrollDX: Int64 = 0
+    nonisolated(unsafe) private var pendingScrollDY: Int64 = 0
+    nonisolated(unsafe) private var hasPendingMove = false
+    nonisolated(unsafe) private var hasPendingScroll = false
+    nonisolated(unsafe) private var moveFlushTimer: DispatchSourceTimer?
+    private static let flushIntervalMs = 8 // ~125Hz steady output
+
     private init() {}
 
     /// TCP with Nagle's algorithm disabled — critical for mouse smoothness, since
@@ -357,6 +367,7 @@ final class PeerNetwork: ObservableObject {
         outboundStream = connection
         fwdToken = config.pairingToken
         fwdHost = config.thisMacName
+        startMoveFlush()
         return await withCheckedContinuation { continuation in
             var resumed = false
             connection.stateUpdateHandler = { [weak self] state in
@@ -385,39 +396,93 @@ final class PeerNetwork: ObservableObject {
 
     @MainActor
     func stopKeyForwarding() {
+        stopMoveFlush()
         outboundStream?.cancel()
         outboundStream = nil
     }
 
-    // Hot path: called directly from the event-tap callback (main run loop), no
-    // @MainActor hop, cached auth, reused encoder — minimal latency per event.
+    // Hot send path. Moves and scrolls are COALESCED: their deltas accumulate on
+    // the serial network queue and flush as one packet on a ~125Hz timer, so WiFi
+    // packet jitter never reaches the cursor/scroll. Keys and buttons send
+    // immediately (buttons flush any pending move/scroll first, to keep order).
+    // Everything runs on `queue`, so there are no locks and one encoder is safe.
+
     func sendKeyEvent(keyCode: UInt16, keyDown: Bool, flags: UInt64, isFlagsChanged: Bool) {
         var message = PeerMessage(action: .keyEvent, hostName: fwdHost, token: fwdToken, setupStatus: nil)
         message.keyCode = keyCode
         message.keyDown = keyDown
         message.flags = flags
         message.isFlagsChanged = isFlagsChanged
-        emit(message)
+        queue.async { [self] in emitOnQueue(message) }
     }
 
     func sendMouseEvent(_ m: MousePayload) {
-        var message = PeerMessage(action: .mouseEvent, hostName: fwdHost, token: fwdToken, setupStatus: nil)
-        message.mouseKind = m.kind
-        message.dx = m.dx
-        message.dy = m.dy
-        message.scrollDX = m.scrollDX
-        message.scrollDY = m.scrollDY
-        message.button = m.button
-        emit(message)
+        switch m.kind {
+        case "move":
+            queue.async { [self] in
+                pendingDX += m.dx; pendingDY += m.dy; hasPendingMove = true
+            }
+        case "scroll":
+            queue.async { [self] in
+                pendingScrollDX += m.scrollDX; pendingScrollDY += m.scrollDY; hasPendingScroll = true
+            }
+        default: // buttons: flush pending move/scroll for ordering, then send now
+            queue.async { [self] in
+                flushPendingOnQueue()
+                var message = PeerMessage(action: .mouseEvent, hostName: fwdHost, token: fwdToken, setupStatus: nil)
+                message.mouseKind = m.kind
+                message.button = m.button
+                emitOnQueue(message)
+            }
+        }
     }
 
-    private func emit(_ message: PeerMessage) {
+    /// Flush accumulated move + scroll as at most one packet each. MUST run on `queue`.
+    private func flushPendingOnQueue() {
+        if hasPendingMove {
+            let dx = pendingDX, dy = pendingDY
+            pendingDX = 0; pendingDY = 0; hasPendingMove = false
+            var message = PeerMessage(action: .mouseEvent, hostName: fwdHost, token: fwdToken, setupStatus: nil)
+            message.mouseKind = "move"; message.dx = dx; message.dy = dy
+            emitOnQueue(message)
+        }
+        if hasPendingScroll {
+            let sx = pendingScrollDX, sy = pendingScrollDY
+            pendingScrollDX = 0; pendingScrollDY = 0; hasPendingScroll = false
+            var message = PeerMessage(action: .mouseEvent, hostName: fwdHost, token: fwdToken, setupStatus: nil)
+            message.mouseKind = "scroll"; message.scrollDX = sx; message.scrollDY = sy
+            emitOnQueue(message)
+        }
+    }
+
+    /// MUST run on `queue` (uses the shared encoder single-threaded).
+    private func emitOnQueue(_ message: PeerMessage) {
         guard let connection = outboundStream, let data = try? encoder.encode(message) else { return }
         var framed = Data(capacity: data.count + 4)
         var length = UInt32(data.count).bigEndian
         withUnsafeBytes(of: &length) { framed.append(contentsOf: $0) }
         framed.append(data)
         connection.send(content: framed, completion: .idempotent)
+    }
+
+    private func startMoveFlush() {
+        stopMoveFlush()
+        queue.async { [self] in
+            pendingDX = 0; pendingDY = 0; hasPendingMove = false
+            pendingScrollDX = 0; pendingScrollDY = 0; hasPendingScroll = false
+        }
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        let ms = Self.flushIntervalMs
+        t.schedule(deadline: .now() + .milliseconds(ms), repeating: .milliseconds(ms), leeway: .milliseconds(1))
+        t.setEventHandler { [weak self] in self?.flushPendingOnQueue() }
+        moveFlushTimer = t
+        t.resume()
+    }
+
+    private func stopMoveFlush() {
+        moveFlushTimer?.cancel()
+        moveFlushTimer = nil
+        queue.async { [self] in flushPendingOnQueue() }
     }
 
     @MainActor
