@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <!-- two Macs: rounded screens -->
+  <g stroke="#fff" stroke-width="6" stroke-linjoin="round" fill="none">
+    <rect x="8"  y="30" width="40" height="30" rx="6"/>
+    <rect x="72" y="30" width="40" height="30" rx="6"/>
+  </g>
+  <!-- stands -->
+  <g fill="#fff">
+    <rect x="24"  y="62" width="8" height="9" rx="2"/>
+    <rect x="18"  y="72" width="20" height="5" rx="2.5"/>
+    <rect x="88"  y="62" width="8" height="9" rx="2"/>
+    <rect x="82"  y="72" width="20" height="5" rx="2.5"/>
+  </g>
+  <!-- handoff double arrow between them -->
+  <g stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M52 45 L68 45"/>
+    <path d="M56 40 L51 45 L56 50"/>
+    <path d="M64 40 L69 45 L64 50"/>
+  </g>
+  <!-- cursor arrow overlapping the bridge -->
+  <path d="M54 74 L54 100 L61 92 L66 103 L70 101 L65 90 L76 90 Z"
+        fill="#fff" stroke="#0b0b16" stroke-width="3" stroke-linejoin="round"/>
+</svg>

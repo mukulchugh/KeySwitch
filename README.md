@@ -2,29 +2,15 @@
 
 ![OpenKVM](docs-assets/banner.png)
 
+[![Latest release](https://img.shields.io/github/v/release/mukulchugh/OpenKVM?label=download&color=7057ff)](https://github.com/mukulchugh/OpenKVM/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black)](#requirements)
+[![License](https://img.shields.io/github/license/mukulchugh/OpenKVM)](LICENSE)
+
 macOS menu bar app that forwards a physical keyboard and mouse from one Mac to another over the local network.
 
 The Mac with the hardware attached captures keystrokes and pointer events, sends them to your other Mac over TCP/UDP, and replays them there. Toggle control with **⌘⇧K** or the menu bar — the hotkey always works locally so you are never locked out.
 
-## Why not Universal Control?
-
-Apple already ships this for free between two Macs — [Universal Control](https://support.apple.com/en-us/102459) is supposed to just work. In practice it's unreliable for a lot of people, and that's the gap OpenKVM fills:
-
-| Universal Control requirement | Why it breaks |
-|---|---|
-| Same Apple ID + 2FA on both Macs | A work Mac + personal Mac won't work together |
-| Same Wi‑Fi network | Guest networks, VLANs, mesh nodes often block it |
-| Handoff enabled | Easy to miss on one machine |
-| No firewall/VPN interference | Blocks the connection outright |
-| Mac must not be asleep | Link drops, needs manual reconnection |
-| Correct display arrangement | Cursor has to exit the exact right screen edge |
-| Recent macOS version | Broke for many users after macOS Ventura 13.3 |
-
-Real reports of it failing: [MacRumors troubleshooting thread](https://forums.macrumors.com/threads/universal-control-not-working-heres-how-to-fix-it.2334383/), [r/apple PSA](https://www.reddit.com/r/apple/comments/tf488r/psa_fixing_universal_control_if_it_doesnt_work/), [MacPowerUsers forum](https://talk.macpowerusers.com/t/problem-with-universal-control-between-two-macs/33718), [Ask Different](https://apple.stackexchange.com/questions/444934/universal-control-not-working-on-two-macbook-pros).
-
-OpenKVM doesn't depend on Handoff, iCloud, or the same Apple ID — it's a plain TCP/UDP connection over Bonjour with its own pairing token. More setup than Universal Control when Universal Control works; more reliable when it doesn't.
-
-**If Universal Control works for you, use it — it's free and built in.** OpenKVM is for the case where it doesn't: different Apple IDs (work + personal Mac), a flaky network, or you just want an explicit hotkey instead of edge-scroll.
+It works across different Apple IDs (a work Mac + a personal Mac), doesn't depend on Handoff or iCloud, and gives you an explicit hotkey instead of edge-scroll — just a plain TCP/UDP connection over Bonjour with its own pairing token.
 
 ## Requirements
 
@@ -162,3 +148,26 @@ scripts/               Installer, signing cert, test clients
 build-app.sh           Universal .app packaging
 build-dmg.sh           DMG + ZIP distribution
 ```
+
+## Known issues & good first issues
+
+New here? These are scoped, self-contained, and a good place to start — the wire protocol is small and documented in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+- **[Windows ↔ Mac support](https://github.com/mukulchugh/OpenKVM/issues/1)** — a Windows client that speaks the existing protocol and injects events via `SendInput`.
+- **[Linux ↔ Mac support](https://github.com/mukulchugh/OpenKVM/issues/2)** — a Linux client injecting events via `uinput`/evdev.
+- **[Mouse jitter during fast movement](https://github.com/mukulchugh/OpenKVM/issues/3)** — sequence UDP mouse packets and coalesce deltas on the receiver.
+
+See all [good first issues](https://github.com/mukulchugh/OpenKVM/labels/good%20first%20issue).
+
+## Contributing
+
+Contributions are welcome — bug fixes, new platform clients, and docs.
+
+1. Fork and clone the repo.
+2. Build and run from source: `swift run` (see [Development](#development)).
+3. Create a branch: `git checkout -b my-change`.
+4. Make your change. Keep the diff focused; match the surrounding style.
+5. Test against a real second machine, or with `scripts/test-peer-ping.py` / `scripts/test-peer-setup.py`.
+6. Commit, push, and open a pull request describing what changed and how you verified it.
+
+For anything non-trivial, open an issue first so we can agree on the approach. The [architecture reference](ARCHITECTURE.md) explains the data flows, wire protocol, and permission model.

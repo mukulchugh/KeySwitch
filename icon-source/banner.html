@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  html,body{margin:0}
+  .canvas{width:1280px;height:600px;position:relative;overflow:hidden;
+    background:radial-gradient(90% 140% at 78% 12%, #241a52 0%, #12101f 46%, #08080e 100%);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif}
+  .grid{position:absolute;inset:0;opacity:.05;
+    background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);
+    background-size:48px 48px}
+  .glow{position:absolute;width:820px;height:820px;left:44%;top:-46%;border-radius:50%;
+    background:radial-gradient(circle, rgba(124,92,255,.42) 0%, rgba(124,92,255,0) 62%);filter:blur(6px)}
+  .row{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:56px;padding:0 90px}
+  .text{max-width:640px}
+  .wordmark{font-size:126px;font-weight:800;letter-spacing:-4px;line-height:1;color:#fff;margin:0}
+  .wordmark b{background:linear-gradient(180deg,#c9b8ff,#8a6bff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .tag{margin:26px 2px 0;font-size:30px;font-weight:500;color:#a7a3c4;letter-spacing:-.3px}
+  .tile{flex:0 0 auto;width:300px;height:300px;border-radius:70px;position:relative;overflow:hidden;
+    background:radial-gradient(120% 120% at 22% 12%, #7c5cff 0%, #6d3ff0 34%, #4b1fb0 70%, #2b1170 100%);
+    box-shadow:inset 0 2px 6px rgba(255,255,255,.28), inset 0 -8px 30px rgba(0,0,0,.35),
+      0 30px 70px rgba(60,20,160,.5)}
+  .tile::before{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%)}
+  .tile svg{position:absolute;inset:0;margin:auto;width:206px;height:206px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.35))}
+</style></head><body>
+  <div class="canvas">
+    <div class="grid"></div><div class="glow"></div>
+    <div class="row">
+      <div class="text">
+        <h1 class="wordmark">Open<b>KVM</b></h1>
+        <p class="tag">Share one keyboard &amp; mouse between two Macs.</p>
+      </div>
+      <div class="tile">MARK</div>
+    </div>
+  </div>
+</body></html>
